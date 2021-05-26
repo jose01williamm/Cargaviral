@@ -14,6 +14,8 @@ library(readr)
 library(ggplot2)
 library(kableExtra)
 library(lubridate)
+library(ggExtra)
+
 ```
 
 
@@ -47,5 +49,215 @@ casos_covid$Fecha = gsub(', ', '', casos_covid$Fecha)
 kbl(head(carga_viral, 15), booktabs = T) %>%
   kable_material(c('hover', 'striped'), full_width = F) %>%
   scroll_box(width = '100%', height = '400px')
+```
+
+
+
+## Histograma
+
+```{r}
+
+fig1 <- carga_viral %>%
+  filter(FECHA.MUESTRA < '2022-01-01') %>%
+  ggplot(aes(x = FECHA.MUESTRA, y = carga)) +
+  geom_point() +
+  xlab('Fecha') + ylab('carga')
+
+ggMarginal(fig1, type = 'histogram')
+
+```
+
+
+
+## Medias y desviación estandard de CT
+
+```{r}
+
+carga_viral %>%
+  filter(FECHA.MUESTRA < '2022-01-01') %>%
+  group_by(FECHA.MUESTRA) %>%
+  mutate(Mean_ct = mean(ct), Median_ct = median(ct), Max_ct = max(ct), Min_ct = min(ct), Std_ct = sd(ct)) %>%
+  ggplot(aes(x = FECHA.MUESTRA, y = ct)) +
+  geom_point(aes(colour = 'Dato'), alpha = 0.2) +
+  geom_line(aes(x = FECHA.MUESTRA, y = Mean_ct, colour = 'Promedio')) +
+  geom_ribbon(aes(ymin = (Mean_ct - Std_ct), ymax = (Mean_ct + Std_ct), colour = 'Promedio'), , fill = 'blue', alpha = 0.25) +
+  xlab('Fecha') + ylab('ct') +
+  scale_colour_manual('Leyenda:', values = c('Dato' = 'black',
+                                             'Promedio' = 'blue')) +
+  theme(legend.position = 'bottom')
+```
+
+
+
+## Casos covid
+
+```{r}
+
+kbl(head(casos_covid, 10), booktabs = T) %>%
+  kable_material(c('striped', 'hover'), full_width = F) %>%
+  scroll_box(width = '100%', height = '400px')
+
+```
+
+
+## Media de CT y casos
+
+```{r}
+
+dt <- left_join(carga_viral, casos_covid, by = c('NUM.DOCUMENTO' = 'ID'))
+dt$Caso = rep(1, length.out = nrow(dt))
+
+```
+
+
+
+## Media y Ct en relación a casos en el tiempo
+
+```{r}
+
+dt %>%
+  filter(FECHA.MUESTRA < '2022-01-01') %>%
+  group_by(FECHA.MUESTRA) %>%
+  mutate(Casos = sum(Caso), Mean_ct = mean(ct), Std_ct = sd(ct)) %>%
+  ggplot(aes(x = Std_ct, y = Casos)) +
+  geom_point() 
+
+```
+
+
+## Figura
+
+```{r}
+
+fig4 <- dt %>%
+  filter(FECHA.MUESTRA < '2022-01-01') %>%
+  group_by(ano, Semana) %>%
+  mutate(Casos = sum(Caso), Mediana_ct = median(ct)) %>%
+  filter(is.na(Semana) == F) %>%
+  ggplot(aes(x = Semana, y = Mediana_ct)) +
+  geom_point() +
+  facet_wrap(~ano)
+
+```
+
+
+
+## Fig Casos CT Semana
+
+```{r}
+
+DT1 <- dt %>%
+  filter(FECHA.MUESTRA < '2022-01-01', is.na(Semana) == F, ano == '2020') %>%
+  group_by(ano, Semana) %>%
+  mutate(Casos = sum(Caso), Mediana_ct = median(ct)) 
+  
+
+Casos_stan = (DT1$Casos - min(DT1$Casos))/(max(DT1$Casos) - min(DT1$Casos))
+Mediana_ct_stan = (DT1$Mediana_ct - min(DT1$Mediana_ct))/(max(DT1$Mediana_ct) - min(DT1$Mediana_ct))
+Semana_t = as.numeric(as.character(DT1$Semana))
+
+Series <- data.frame(cbind(Semana_t, Casos_stan, Mediana_ct_stan))
+Series <- Series[order(Series$Semana_t), ]
+Series <- unique(Series)
+
+DT1$Casos_stan = Casos_stan
+DT1$Mediana_ct_stan = Mediana_ct_stan
+
+DT1 %>%
+  ggplot(aes(x = Semana, y = Casos_stan)) +
+  geom_point(aes(colour = 'Casos')) +
+  geom_point(aes(x = Semana, y = Mediana_ct_stan, colour = 'ct')) +
+  theme(legend.position = 'bottom')
+
+```
+
+
+## Series de casos estandarizados
+
+```{r}
+
+Casos_stan_ts <- ts(Series$Casos_stan, start = 14, end = 53)
+Mediana_ct_stan_ts <- ts(Series$Mediana_ct_stan, start = 14, end = 53)
+
+plot(Casos_stan_ts)
+
+```
+
+
+## Función de correlación cruzada
+
+```{r}
+
+ccf(Mediana_ct_stan_ts, Casos_stan_ts)
+
+```
+
+
+## Mediana de ct y casos en relación a correlación
+
+```{r}
+
+library(astsa)
+lag2.plot(Mediana_ct_stan_ts, Casos_stan_ts, 4)
+
+```
+
+
+## Casos día y mediana CT
+
+```{r}
+
+ccfvalues = ccf(Mediana_ct_stan_ts, Casos_stan_ts)
+
+```
+
+
+## Valores
+
+```{r}
+
+ccfvalues
+
+```
+
+
+## Mediana de ct en relación a casos semana
+
+```{r}
+
+DT2 <- dt %>%
+  filter(FECHA.MUESTRA < '2022-01-01', is.na(Semana) == F, ano == '2020') %>%
+  group_by(FECHA.MUESTRA) %>%
+  mutate(Casos = sum(Caso), Mediana_ct = median(ct)) 
+Casos_stan2 = (DT2$Casos - min(DT2$Casos))/(max(DT2$Casos) - min(DT2$Casos))
+Mediana_ct_stan2 = (DT2$Mediana_ct - min(DT2$Mediana_ct))/(max(DT2$Mediana_ct) - min(DT2$Mediana_ct))
+Semana_t2 = as.numeric(as.character(DT2$Semana))
+
+Series2 <- data.frame(cbind(Semana_t2, Casos_stan2, Mediana_ct_stan2))
+Series2 <- Series2[order(Series2$Semana_t2), ]
+Series2 <- unique(Series2)
+
+DT2$Casos_stan2 = Casos_stan2
+DT2$Mediana_ct_stan2 = Mediana_ct_stan2
+
+DT2 %>%
+  ggplot(aes(x = FECHA.MUESTRA, y = Casos_stan2)) +
+  geom_line() + geom_smooth(aes(x = FECHA.MUESTRA, y = Casos_stan2), span = 0.15) +
+  geom_line(aes(x = FECHA.MUESTRA, y = Mediana_ct_stan2), color = 'red') +
+  geom_smooth(aes(x = FECHA.MUESTRA, y = Mediana_ct_stan2))
+
+
+```
+
+
+## Mediana de Ct con relación a casos por día
+
+```{r}
+
+Casos_stan2_ts <- ts(Series2$Casos_stan2)
+Mediana_ct_stan2_ts <- ts(Series2$Mediana_ct_stan2)
+
+ccf(Mediana_ct_stan2_ts, Casos_stan2_ts)
+
 ```
 
