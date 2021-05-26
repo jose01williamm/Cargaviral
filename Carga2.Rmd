@@ -1,0 +1,51 @@
+---
+title: "Carga viral"
+author: "Autores"
+date: "26/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(kableExtra)
+library(lubridate)
+```
+
+
+## Cargar datos
+
+```{r}
+carga_viral = read.csv('datos/cargaviral.csv', header = T, sep = ';')[ , c(1:6)]
+carga_viral$FECHA.MUESTRA = dmy(carga_viral$FECHA.MUESTRA)
+carga_viral$NUM.DOCUMENTO = factor(carga_viral$NUM.DOCUMENTO)
+carga_viral$ct = as.numeric(gsub(',', '.', carga_viral$ct))
+carga_viral$carga = as.numeric(gsub(',', '.', carga_viral$carga))
+
+casos_covid = read.csv('datos/CASOSCOVID2.csv', header = T, sep = ';')[ , -c(1)]
+casos_covid$Ciudad = factor(casos_covid$Ciudad)
+casos_covid$Barrio = factor(casos_covid$Barrio)
+casos_covid$ID = factor(casos_covid$ID)
+casos_covid$Sexo = factor(casos_covid$Sexo)
+casos_covid$Semana = factor(casos_covid$Semana)
+casos_covid$ano = factor(casos_covid$ano)
+casos_covid$Fecha = gsub(', ', '', casos_covid$Fecha)
+
+
+```
+
+
+
+
+## Datos de la carga
+
+```{r}
+kbl(head(carga_viral, 15), booktabs = T) %>%
+  kable_material(c('hover', 'striped'), full_width = F) %>%
+  scroll_box(width = '100%', height = '400px')
+```
+
